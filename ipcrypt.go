@@ -1,4 +1,4 @@
-package main
+package ipcrypt
 
 // see also https://github.com/dgryski/go-ipcrypt/
 
@@ -87,12 +87,11 @@ func bytes2ip(bytes [4]byte) string {
 	return strings.Join(ipaddr, ".")
 }
 
-func Encrypt(k [16]byte, ip string) (string, error) {
-	p := net.ParseIP(ip)
-	if p == nil {
-		return "", errors.New("encrypt: invalid IP")
+func EncryptBin(k [16]byte, ip []byte) ([4]byte, error) {
+	if len(ip) < 16 {
+		return [4]byte{}, errors.New("encrypt: invalid IP")
 	}
-	state := [4]byte{p[12], p[13], p[14], p[15]}
+	state := [4]byte{ip[12], ip[13], ip[14], ip[15]}
 
 	state = xor4(state, k[:4])
 	state = permute_fwd(state)
@@ -102,7 +101,37 @@ func Encrypt(k [16]byte, ip string) (string, error) {
 	state = permute_fwd(state)
 	state = xor4(state, k[12:16])
 
-	return bytes2ip(state), nil
+	return state, nil
+}
+
+func Encrypt(k [16]byte, ip string) (string, error) {
+	p := net.ParseIP(ip)
+	if p == nil {
+		return "", errors.New("encrypt: invalid IP")
+	}
+	var cyphertext [4]byte
+	var err error
+	if cyphertext, err = EncryptBin(k, p); err != nil {
+		return "", err
+	}
+	return bytes2ip(cyphertext), nil
+}
+
+func DecryptBin(k [16]byte, ip []byte) ([4]byte, error) {
+	if len(ip) < 16 {
+		return [4]byte{}, errors.New("encrypt: invalid IP")
+	}
+	state := [4]byte{ip[12], ip[13], ip[14], ip[15]}
+
+	state = xor4(state, k[12:16])
+	state = permute_bwd(state)
+	state = xor4(state, k[8:12])
+	state = permute_bwd(state)
+	state = xor4(state, k[4:8])
+	state = permute_bwd(state)
+	state = xor4(state, k[:4])
+
+	return state, nil
 }
 
 func Decrypt(k [16]byte, ip string) (string, error) {
@@ -110,17 +139,12 @@ func Decrypt(k [16]byte, ip string) (string, error) {
 	if p == nil {
 		return "", errors.New("encrypt: invalid IP")
 	}
-	state := [4]byte{p[12], p[13], p[14], p[15]}
-
-	state = xor4(state, k[12:16])
-	state = permute_bwd(state)
-	state = xor4(state, k[8:12])
-	state = permute_bwd(state)
-	state = xor4(state, k[4:8])
-	state = permute_bwd(state)
-	state = xor4(state, k[:4])
-
-	return bytes2ip(state), nil
+	var plaintext [4]byte
+	var err error
+	if plaintext, err = DecryptBin(k, p); err != nil {
+		return "", err
+	}
+	return bytes2ip(plaintext), nil
 }
 
 func test() error {
