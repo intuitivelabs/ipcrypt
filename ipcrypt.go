@@ -87,11 +87,20 @@ func bytes2ip(bytes [4]byte) string {
 	return strings.Join(ipaddr, ".")
 }
 
-func EncryptBin(k [16]byte, ip []byte) ([4]byte, error) {
-	if len(ip) < 16 {
-		return [4]byte{}, errors.New("encrypt: invalid IP")
+func to4(ip net.IP) (v4 [4]byte, err error) {
+	if tmp := ip.To4(); tmp != nil {
+		v4 = [4]byte{tmp[0], tmp[1], tmp[2], tmp[3]}
+	} else {
+		err = errors.New("invalid IP")
 	}
-	state := [4]byte{ip[12], ip[13], ip[14], ip[15]}
+	return
+}
+
+func EncryptBin(k [16]byte, ip net.IP) (state [4]byte, err error) {
+	if state, err = to4(ip); err != nil {
+		state = [4]byte{}
+		return
+	}
 
 	state = xor4(state, k[:4])
 	state = permute_fwd(state)
@@ -101,7 +110,7 @@ func EncryptBin(k [16]byte, ip []byte) ([4]byte, error) {
 	state = permute_fwd(state)
 	state = xor4(state, k[12:16])
 
-	return state, nil
+	return
 }
 
 func Encrypt(k [16]byte, ip string) (string, error) {
@@ -117,11 +126,11 @@ func Encrypt(k [16]byte, ip string) (string, error) {
 	return bytes2ip(cyphertext), nil
 }
 
-func DecryptBin(k [16]byte, ip []byte) ([4]byte, error) {
-	if len(ip) < 16 {
-		return [4]byte{}, errors.New("encrypt: invalid IP")
+func DecryptBin(k [16]byte, ip net.IP) (state [4]byte, err error) {
+	if state, err = to4(ip); err != nil {
+		state = [4]byte{}
+		return
 	}
-	state := [4]byte{ip[12], ip[13], ip[14], ip[15]}
 
 	state = xor4(state, k[12:16])
 	state = permute_bwd(state)
@@ -131,7 +140,7 @@ func DecryptBin(k [16]byte, ip []byte) ([4]byte, error) {
 	state = permute_bwd(state)
 	state = xor4(state, k[:4])
 
-	return state, nil
+	return
 }
 
 func Decrypt(k [16]byte, ip string) (string, error) {
